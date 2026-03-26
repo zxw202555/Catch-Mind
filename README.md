@@ -1,6 +1,6 @@
 # catchmind
 
-A visualized to-do notebook for AHDHers and all.
+A visualized to-do notebook for ADHDers and all.
 
 ## Getting Started
 
