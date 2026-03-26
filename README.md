@@ -1,6 +1,6 @@
 # catchmind
 
-A new Flutter project.
+A visualized to-do notebook for AHDHers and all.
 
 ## Getting Started
 
