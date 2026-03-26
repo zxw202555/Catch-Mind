@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/task.dart';
 import '../providers/task_providers.dart';
+import '../providers/language_provider.dart';
 import '../theme/catchmind_theme.dart';
 import '../widgets/task_interactive.dart';
 
@@ -17,6 +18,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
   bool _isMerged = false;
 
   Color _quadrantBg(String name) {
+    // 使用原始中文键值来匹配颜色
     switch (name) {
       case '重要紧急':
         return CatchMindColors.qImportantUrgent;
@@ -31,7 +33,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
     }
   }
 
-  void _onDropInQuadrant(Task task, String quadrantName, TaskProvider p) {
+  void _onDropInQuadrant(Task task, String quadrantName, TaskProvider p, AppLocalizations l10n) {
     p.updateTask(
       task.copyWith(
         routed: true,
@@ -40,9 +42,10 @@ class _MustDoScreenState extends State<MustDoScreen> {
       ),
     );
     if (mounted) {
+      final displayName = l10n.getQuadrantName(quadrantName);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('已归入「$quadrantName」'),
+          content: Text('${l10n.snackbarMovedToQuadrant}$displayName${l10n.snackbarMovedToQuadrantSuffix}'),
           duration: const Duration(seconds: 1),
         ),
       );
@@ -52,6 +55,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
   Widget _buildQuadrant(
     String quadrantName,
     TaskProvider provider,
+    AppLocalizations l10n,
   ) {
     final tasks = provider.mustDoTasks
         .where((t) => t.quadrant == quadrantName)
@@ -62,10 +66,12 @@ class _MustDoScreenState extends State<MustDoScreen> {
       grouped.putIfAbsent(t.tag, () => []).add(t);
     }
 
+    final displayName = l10n.getQuadrantName(quadrantName);
+
     return DragTarget<Task>(
       onWillAcceptWithDetails: (_) => true,
       onAcceptWithDetails: (d) =>
-          _onDropInQuadrant(d.data, quadrantName, provider),
+          _onDropInQuadrant(d.data, quadrantName, provider, l10n),
       builder: (context, candidate, _) {
         return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
@@ -98,7 +104,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                quadrantName,
+                displayName,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -108,12 +114,12 @@ class _MustDoScreenState extends State<MustDoScreen> {
               ),
               const Divider(height: 10, thickness: 0.5),
               if (tasks.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 14),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   child: Center(
                     child: Text(
-                      '✨ 这里还很清爽',
-                      style: TextStyle(
+                      l10n.emptyState,
+                      style: const TextStyle(
                         color: CatchMindColors.textSecondary,
                         fontSize: 12,
                       ),
@@ -121,7 +127,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
                   ),
                 )
               else if (_isMerged)
-                ..._buildMergedChildren(grouped, provider)
+                ..._buildMergedChildren(grouped, provider, l10n)
               else
                 ...tasks.map((t) => _taskRow(t, provider)),
             ],
@@ -134,11 +140,13 @@ class _MustDoScreenState extends State<MustDoScreen> {
   List<Widget> _buildMergedChildren(
     Map<String, List<Task>> grouped,
     TaskProvider provider,
+    AppLocalizations l10n,
   ) {
     return grouped.keys.map((tag) {
       final list = grouped[tag]!;
       final tagColor =
           Color(int.parse(list.first.tagColor.replaceFirst('#', '0xFF')));
+      final displayTagName = l10n.getTagName(tag);
       return ExpansionTile(
         tilePadding: EdgeInsets.zero,
         childrenPadding: EdgeInsets.zero,
@@ -155,7 +163,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                '$tag (${list.length})',
+                '$displayTagName (${list.length})',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -174,7 +182,7 @@ class _MustDoScreenState extends State<MustDoScreen> {
     return TaskInteractive(task: task, provider: provider);
   }
 
-  Widget _inboxStrip(TaskProvider provider) {
+  Widget _inboxStrip(TaskProvider provider, AppLocalizations l10n) {
     final inbox = provider.inboxTasks;
     if (inbox.isEmpty) {
       return Container(
@@ -186,9 +194,9 @@ class _MustDoScreenState extends State<MustDoScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFFFFE082).withAlpha(179)),
         ),
-        child: const Text(
-          '暂无待分拣。点右下角 + 新建；可拖到下方「非必须」条。',
-          style: TextStyle(fontSize: 13, color: CatchMindColors.textSecondary),
+        child: Text(
+          l10n.emptyInbox,
+          style: const TextStyle(fontSize: 13, color: CatchMindColors.textSecondary),
         ),
       );
     }
@@ -205,9 +213,9 @@ class _MustDoScreenState extends State<MustDoScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
-            '待分拣 → 拖到象限，或拖到屏幕最下方「非必须」条',
-            style: TextStyle(
+          Text(
+            l10n.inboxHint,
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: CatchMindColors.textPrimary,
@@ -236,8 +244,10 @@ class _MustDoScreenState extends State<MustDoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<TaskProvider>(
-      builder: (context, provider, _) {
+    return Consumer2<TaskProvider, LanguageProvider>(
+      builder: (context, provider, languageProvider, _) {
+        final l10n = AppLocalizations(languageProvider.currentLanguage);
+        
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -246,27 +256,40 @@ class _MustDoScreenState extends State<MustDoScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    '必须完成',
-                    style: TextStyle(
+                  Text(
+                    l10n.titleMustDo,
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       color: CatchMindColors.textPrimary,
                       letterSpacing: -0.3,
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      _isMerged ? Icons.merge_type : Icons.view_list,
-                      color: CatchMindColors.accent,
-                    ),
-                    onPressed: () => setState(() => _isMerged = !_isMerged),
-                    tooltip: _isMerged ? '取消合并' : '按标签合并',
+                  Row(
+                    children: [
+                      // 语言切换按钮
+                      IconButton(
+                        icon: const Icon(
+                          Icons.language,
+                          color: CatchMindColors.accent,
+                        ),
+                        onPressed: () => languageProvider.toggleLanguage(),
+                        tooltip: l10n.languageSwitch,
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _isMerged ? Icons.merge_type : Icons.view_list,
+                          color: CatchMindColors.accent,
+                        ),
+                        onPressed: () => setState(() => _isMerged = !_isMerged),
+                        tooltip: _isMerged ? l10n.tooltipUnmerge : l10n.tooltipMerge,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            _inboxStrip(provider),
+            _inboxStrip(provider, l10n),
             const Divider(height: 1),
             Expanded(
               child: SingleChildScrollView(
@@ -279,8 +302,8 @@ class _MustDoScreenState extends State<MustDoScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildQuadrant('重要紧急', provider),
-                          _buildQuadrant('不重要紧急', provider),
+                          _buildQuadrant('重要紧急', provider, l10n),
+                          _buildQuadrant('不重要紧急', provider, l10n),
                         ],
                       ),
                     ),
@@ -290,8 +313,8 @@ class _MustDoScreenState extends State<MustDoScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildQuadrant('重要不紧急', provider),
-                          _buildQuadrant('不重要不紧急', provider),
+                          _buildQuadrant('重要不紧急', provider, l10n),
+                          _buildQuadrant('不重要不紧急', provider, l10n),
                         ],
                       ),
                     ),

@@ -53,6 +53,14 @@ class Task extends HiveObject {
   @HiveField(11)
   late bool routed;
 
+  /// 完成时间（仅已完成事项）
+  @HiveField(12)
+  late DateTime? completedAt;
+
+  /// 编辑时间（仅已编辑事项）
+  @HiveField(13)
+  late DateTime? editedAt;
+
   // 构造函数
   Task({
     required this.id,
@@ -67,6 +75,8 @@ class Task extends HiveObject {
     required this.createdAt,
     this.review,
     this.routed = false,
+    this.completedAt,
+    this.editedAt,
   });
 
   // 复制方法（拖拽更新象限/标记完成用）
@@ -83,6 +93,8 @@ class Task extends HiveObject {
     DateTime? createdAt,
     String? review,
     bool? routed,
+    DateTime? completedAt,
+    DateTime? editedAt,
   }) {
     return Task(
       id: id ?? this.id,
@@ -97,6 +109,8 @@ class Task extends HiveObject {
       createdAt: createdAt ?? this.createdAt,
       review: review ?? this.review,
       routed: routed ?? this.routed,
+      completedAt: completedAt ?? this.completedAt,
+      editedAt: editedAt ?? this.editedAt,
     );
   }
 }

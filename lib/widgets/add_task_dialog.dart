@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../data/preset_tags.dart';
 import '../models/task.dart';
 import '../providers/task_providers.dart';
+import '../providers/language_provider.dart';
 import '../theme/catchmind_theme.dart';
+import './tag_selector.dart';
 
 /// 居中「小窗」新建事项（默认仅输入框，可展开标签与 DDL）
 Future<void> showAddTaskDialog(BuildContext context) {
@@ -44,25 +45,18 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
   bool _ddlNone = true;
   bool _moreOptions = true; // 默认展开
 
-  List<TagPreset> _allTagChoices() {
-    final box = Hive.box<String>('custom_tags');
-    final custom = box.toMap().entries.map((e) {
-      final parts = e.value.split('|');
-      final emoji = parts.isNotEmpty ? parts[0] : '✨';
-      final hex = parts.length > 1 ? parts[1] : '#607D8B';
-      return TagPreset(name: e.key, emoji: emoji, colorHex: hex);
-    });
-    return [...kPresetTags, ...custom];
-  }
-
   @override
   void initState() {
     super.initState();
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
+    
+    // 根据语言选择默认标签
     final first = kPresetTags.first;
     _tag = first.name;
     _emoji = first.emoji;
     _tagColor = first.colorHex;
-    _ddlNone = true;
+    _ddlNone = _ddl == null;
   }
 
   @override
@@ -101,6 +95,9 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
 
     final bool noDdl = !_moreOptions || _ddlNone;
     
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
+    
     final isDiary = _tag == '感悟复盘';
     final task = Task(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -120,19 +117,23 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
     Provider.of<TaskProvider>(context, listen: false).addTask(task);
     Navigator.of(context).pop();
     messenger.showSnackBar(
-      const SnackBar(content: Text('已保存')),
+      SnackBar(content: Text(l10n.snackbarSaved)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    final choices = _allTagChoices();
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
+    
+    final dateFormat = l10n.isEnglish ? 'MMM d, HH:mm' : 'M月d日 HH:mm';
+    final dateLocale = l10n.isEnglish ? 'en_US' : 'zh_CN';
     final ddlLabel = _ddlNone
-        ? '无'
+        ? l10n.dialogDeadlineNone
         : (_ddl != null
-            ? DateFormat('M月d日 HH:mm', 'zh_CN').format(_ddl!)
-            : '未选择');
+            ? DateFormat(dateFormat, dateLocale).format(_ddl!)
+            : l10n.dialogDeadlineNotSelected);
 
     return Dialog(
       child: ConstrainedBox(
@@ -146,9 +147,9 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    '✨ 捕捉你的想法',
-                    style: TextStyle(
+                  Text(
+                    l10n.dialogAddTitle,
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: CatchMindColors.textPrimary,
@@ -158,40 +159,24 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                   TextFormField(
                     controller: _contentController,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: '输入你的事项…',
+                    decoration: InputDecoration(
+                      hintText: l10n.dialogHint,
                       isDense: true,
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return '请输入内容';
+                      if (v == null || v.trim().isEmpty) return l10n.dialogContentRequired;
                       return null;
                     },
                   ),
                   if (_moreOptions) ...[
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: choices.any((c) => c.name == _tag)
-                          ? _tag
-                          : choices.first.name,
-                      decoration: const InputDecoration(
-                        labelText: '标签',
-                        isDense: true,
-                      ),
-                      items: choices
-                          .map(
-                            (c) => DropdownMenuItem(
-                              value: c.name,
-                              child: Text('${c.emoji} ${c.name}'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) {
-                        if (v == null) return;
-                        final c = choices.firstWhere((e) => e.name == v);
+                    TagSelector(
+                      initialTag: _tag,
+                      onTagSelected: (tag, emoji, color) {
                         setState(() {
-                          _tag = c.name;
-                          _emoji = c.emoji;
-                          _tagColor = c.colorHex;
+                          _tag = tag;
+                          _emoji = emoji;
+                          _tagColor = color;
                         });
                       },
                     ),
@@ -203,7 +188,7 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'ddl：$ddlLabel',
+                            '${l10n.dialogDeadline}：$ddlLabel',
                             style: const TextStyle(
                               fontSize: 14,
                               color: CatchMindColors.textPrimary,
@@ -212,7 +197,7 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                         ),
                         TextButton(
                           onPressed: _pickDdl,
-                          child: Text('选择', style: TextStyle(color: accent)),
+                          child: Text(l10n.dialogSelect, style: TextStyle(color: accent)),
                         ),
                         TextButton(
                           onPressed: () => setState(() {
@@ -220,7 +205,7 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                             _ddl = null;
                           }),
                           child: Text(
-                            '清除',
+                            l10n.dialogClear,
                             style: TextStyle(
                               color: CatchMindColors.textSecondary,
                             ),
@@ -241,7 +226,7 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                         color: accent,
                       ),
                       label: Text(
-                        _moreOptions ? '收起标签与截止时间' : '标签与截止时间',
+                        _moreOptions ? l10n.dialogCollapse : l10n.dialogExpand,
                         style: TextStyle(color: accent, fontSize: 13),
                       ),
                     ),
@@ -252,7 +237,7 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text('取消', style: TextStyle(color: accent)),
+                        child: Text(l10n.dialogCancel, style: TextStyle(color: accent)),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -268,7 +253,7 @@ class _AddTaskDialogBodyState extends State<_AddTaskDialogBody> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text('保存'),
+                        child: Text(l10n.dialogSave),
                       ),
                     ],
                   ),
@@ -293,6 +278,7 @@ class _EditTaskDialogBody extends StatefulWidget {
 
 class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
   final _contentController = TextEditingController();
+  final _reviewController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   late String _tag;
@@ -301,32 +287,25 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
   DateTime? _ddl;
   bool _ddlNone = true;
   bool _moreOptions = true; // 默认展开
-
-  List<TagPreset> _allTagChoices() {
-    final box = Hive.box<String>('custom_tags');
-    final custom = box.toMap().entries.map((e) {
-      final parts = e.value.split('|');
-      final emoji = parts.isNotEmpty ? parts[0] : '✨';
-      final hex = parts.length > 1 ? parts[1] : '#607D8B';
-      return TagPreset(name: e.key, emoji: emoji, colorHex: hex);
-    });
-    return [...kPresetTags, ...custom];
-  }
+  bool _showReview = false; // 是否显示复盘输入
 
   @override
   void initState() {
     super.initState();
     _contentController.text = widget.task.content;
+    _reviewController.text = widget.task.review ?? '';
     _tag = widget.task.tag;
     _emoji = widget.task.emoji;
     _tagColor = widget.task.tagColor;
     _ddl = widget.task.ddl;
     _ddlNone = widget.task.ddl == null;
+    _showReview = widget.task.isCompleted; // 已完成的任务显示复盘
   }
 
   @override
   void dispose() {
     _contentController.dispose();
+    _reviewController.dispose();
     super.dispose();
   }
 
@@ -364,31 +343,39 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
 
     final bool noDdl = !_moreOptions || _ddlNone;
     
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
+    
     final updatedTask = widget.task.copyWith(
       content: _contentController.text.trim(),
       tag: _tag,
       emoji: _emoji,
       tagColor: _tagColor,
       ddl: noDdl ? null : _ddl,
+      review: _reviewController.text.trim(),
     );
 
     final messenger = ScaffoldMessenger.of(context);
     Provider.of<TaskProvider>(context, listen: false).updateTask(updatedTask);
     Navigator.of(context).pop();
     messenger.showSnackBar(
-      const SnackBar(content: Text('已更新')),
+      SnackBar(content: Text(l10n.snackbarUpdated)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    final choices = _allTagChoices();
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
+    
+    final dateFormat = l10n.isEnglish ? 'MMM d, HH:mm' : 'M月d日 HH:mm';
+    final dateLocale = l10n.isEnglish ? 'en_US' : 'zh_CN';
     final ddlLabel = _ddlNone
-        ? '无'
+        ? l10n.dialogDeadlineNone
         : (_ddl != null
-            ? DateFormat('M月d日 HH:mm', 'zh_CN').format(_ddl!)
-            : '未选择');
+            ? DateFormat(dateFormat, dateLocale).format(_ddl!)
+            : l10n.dialogDeadlineNotSelected);
 
     return Dialog(
       child: ConstrainedBox(
@@ -402,9 +389,9 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text(
-                    '✨ 编辑事项',
-                    style: TextStyle(
+                  Text(
+                    l10n.dialogEditTitle,
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: CatchMindColors.textPrimary,
@@ -414,40 +401,24 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                   TextFormField(
                     controller: _contentController,
                     maxLines: 3,
-                    decoration: const InputDecoration(
-                      hintText: '输入你的事项…',
+                    decoration: InputDecoration(
+                      hintText: l10n.dialogHint,
                       isDense: true,
                     ),
                     validator: (v) {
-                      if (v == null || v.trim().isEmpty) return '请输入内容';
+                      if (v == null || v.trim().isEmpty) return l10n.dialogContentRequired;
                       return null;
                     },
                   ),
                   if (_moreOptions) ...[
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: choices.any((c) => c.name == _tag)
-                          ? _tag
-                          : choices.first.name,
-                      decoration: const InputDecoration(
-                        labelText: '标签',
-                        isDense: true,
-                      ),
-                      items: choices
-                          .map(
-                            (c) => DropdownMenuItem(
-                              value: c.name,
-                              child: Text('${c.emoji} ${c.name}'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (v) {
-                        if (v == null) return;
-                        final c = choices.firstWhere((e) => e.name == v);
+                    TagSelector(
+                      initialTag: _tag,
+                      onTagSelected: (tag, emoji, color) {
                         setState(() {
-                          _tag = c.name;
-                          _emoji = c.emoji;
-                          _tagColor = c.colorHex;
+                          _tag = tag;
+                          _emoji = emoji;
+                          _tagColor = color;
                         });
                       },
                     ),
@@ -459,7 +430,7 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'ddl：$ddlLabel',
+                            '${l10n.dialogDeadline}：$ddlLabel',
                             style: const TextStyle(
                               fontSize: 14,
                               color: CatchMindColors.textPrimary,
@@ -468,7 +439,7 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                         ),
                         TextButton(
                           onPressed: _pickDdl,
-                          child: Text('选择', style: TextStyle(color: accent)),
+                          child: Text(l10n.dialogSelect, style: TextStyle(color: accent)),
                         ),
                         TextButton(
                           onPressed: () => setState(() {
@@ -476,7 +447,7 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                             _ddl = null;
                           }),
                           child: Text(
-                            '清除',
+                            l10n.dialogClear,
                             style: TextStyle(
                               color: CatchMindColors.textSecondary,
                             ),
@@ -497,18 +468,38 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                         color: accent,
                       ),
                       label: Text(
-                        _moreOptions ? '收起标签与截止时间' : '标签与截止时间',
+                        _moreOptions ? l10n.dialogCollapse : l10n.dialogExpand,
                         style: TextStyle(color: accent, fontSize: 13),
                       ),
                     ),
                   ),
+                  if (_showReview) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      l10n.dialogReview,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: CatchMindColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _reviewController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        hintText: l10n.dialogReviewHint,
+                        isDense: true,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text('取消', style: TextStyle(color: accent)),
+                        child: Text(l10n.dialogCancel, style: TextStyle(color: accent)),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -524,7 +515,7 @@ class _EditTaskDialogBodyState extends State<_EditTaskDialogBody> {
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text('保存'),
+                        child: Text(l10n.dialogSave),
                       ),
                     ],
                   ),

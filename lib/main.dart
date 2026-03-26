@@ -1,49 +1,52 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
-
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'providers/task_providers.dart'; // 文件名是 task_providers.dart（多一个 s）
+import 'providers/language_provider.dart';
 import 'models/task.dart';
-import 'providers/task_providers.dart';
 import 'screens/home_screen.dart';
 import 'theme/catchmind_theme.dart';
 
-Future<void> main() async {
+void main() async {
+  // 初始化Flutter绑定
   WidgetsFlutterBinding.ensureInitialized();
-  await Hive.initFlutter();
-  Hive.registerAdapter(TaskAdapter());
-  await Hive.openBox<Task>('tasks');
-  await Hive.openBox<String>('custom_tags');
+  // 初始化本地化数据
   await initializeDateFormatting('zh_CN', null);
+  // 初始化Hive（本地存储）
+  await Hive.initFlutter();
+  // 注册Task适配器（必须）
+  Hive.registerAdapter(TaskAdapter());
+  // 打开任务存储盒子
+  await Hive.openBox<Task>('tasks');
+  // 打开自定义标签存储盒子
+  await Hive.openBox<String>('custom_tags');
+  // 打开设置存储盒子
+  await Hive.openBox<String>('settings');
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => TaskProvider()..loadTasks(),
-      child: const CatchMindApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
-class CatchMindApp extends StatelessWidget {
-  const CatchMindApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'CatchMind',
-      theme: buildCatchMindTheme(),
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+    return MultiProvider(
+      providers: [
+        // 全局提供Task状态管理
+        ChangeNotifierProvider(create: (context) => TaskProvider()),
+        // 全局提供语言状态管理
+        ChangeNotifierProvider(create: (context) => LanguageProvider()),
       ],
-      supportedLocales: const [
-        Locale('zh', 'CN'),
-        Locale('en', 'US'),
-      ],
-      locale: const Locale('zh', 'CN'),
-      home: const HomeScreen(),
+      child: MaterialApp(
+        title: 'CatchMind',
+        debugShowCheckedModeBanner: false,
+        theme: buildCatchMindTheme(),
+        home: const HomeScreen(),
+      ),
     );
   }
 }

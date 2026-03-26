@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../models/task.dart';
 import '../providers/task_providers.dart';
+import '../providers/language_provider.dart';
 import '../theme/catchmind_theme.dart';
 import '../widgets/add_task_dialog.dart';
 import 'completed_screen.dart';
@@ -27,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
     CompletedScreen(),
   ];
 
-  void _acceptDropToMust(Task task, TaskProvider p) {
+  void _acceptDropToMust(Task task, TaskProvider p, AppLocalizations l10n) {
     p.updateTask(
       task.copyWith(
         routed: true,
@@ -38,14 +39,14 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _currentIndex = 0);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已移到「必须」，默认在「重要紧急」'),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: Text(l10n.snackbarMovedToMust),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
 
-  void _acceptDropToNonMust(Task task, TaskProvider p) {
+  void _acceptDropToNonMust(Task task, TaskProvider p, AppLocalizations l10n) {
     if (!task.routed) {
       p.updateTask(
         task.copyWith(
@@ -65,9 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _currentIndex = 1);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已移到「非必须」'),
-        duration: Duration(seconds: 1),
+      SnackBar(
+        content: Text(l10n.snackbarMovedToNonMust),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
@@ -112,81 +113,87 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: _screens[_currentIndex]),
-          if (_currentIndex == 0)
-            Consumer<TaskProvider>(
-              builder: (context, p, _) {
-                return DragTarget<Task>(
-                  onWillAcceptWithDetails: (_) => true,
-                  onAcceptWithDetails: (d) => _acceptDropToNonMust(d.data, p),
-                  builder: (context, candidate, _) {
-                    final active = candidate.isNotEmpty;
-                    return _dragStrip(
-                      active: active,
-                      idle: '拖动事项到这里 变为 非必须',
-                      activeLabel: '松开 变为 非必须',
+    return Consumer<LanguageProvider>(
+      builder: (context, languageProvider, _) {
+        final l10n = AppLocalizations(languageProvider.currentLanguage);
+        
+        return Scaffold(
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _screens[_currentIndex]),
+              if (_currentIndex == 0)
+                Consumer<TaskProvider>(
+                  builder: (context, p, _) {
+                    return DragTarget<Task>(
+                      onWillAcceptWithDetails: (_) => true,
+                      onAcceptWithDetails: (d) => _acceptDropToNonMust(d.data, p, l10n),
+                      builder: (context, candidate, _) {
+                        final active = candidate.isNotEmpty;
+                        return _dragStrip(
+                          active: active,
+                          idle: l10n.dragToNonMust,
+                          activeLabel: l10n.dragToNonMustActive,
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
-          if (_currentIndex == 1)
-            Consumer<TaskProvider>(
-              builder: (context, p, _) {
-                return DragTarget<Task>(
-                  onWillAcceptWithDetails: (_) => true,
-                  onAcceptWithDetails: (d) => _acceptDropToMust(d.data, p),
-                  builder: (context, candidate, _) {
-                    final active = candidate.isNotEmpty;
-                    return _dragStrip(
-                      active: active,
-                      idle: '拖动事项到这里 变为 必须（先进入「重要紧急」）',
-                      activeLabel: '松开 变为 必须',
+                ),
+              if (_currentIndex == 1)
+                Consumer<TaskProvider>(
+                  builder: (context, p, _) {
+                    return DragTarget<Task>(
+                      onWillAcceptWithDetails: (_) => true,
+                      onAcceptWithDetails: (d) => _acceptDropToMust(d.data, p, l10n),
+                      builder: (context, candidate, _) {
+                        final active = candidate.isNotEmpty;
+                        return _dragStrip(
+                          active: active,
+                          idle: l10n.dragToMust,
+                          activeLabel: l10n.dragToMustActive,
+                        );
+                      },
                     );
                   },
-                );
-              },
-            ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        elevation: 0,
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() => _currentIndex = index);
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.check_circle_outline),
-            selectedIcon: Icon(Icons.check_circle),
-            label: '必须完成',
+                ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(Icons.more_horiz),
-            label: '非必须',
+          bottomNavigationBar: NavigationBar(
+            elevation: 0,
+            selectedIndex: _currentIndex,
+            onDestinationSelected: (index) {
+              setState(() => _currentIndex = index);
+            },
+            destinations: [
+              NavigationDestination(
+                icon: const Icon(Icons.check_circle_outline),
+                selectedIcon: const Icon(Icons.check_circle),
+                label: l10n.navMustDo,
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.more_horiz),
+                selectedIcon: const Icon(Icons.more_horiz),
+                label: l10n.navNonMustDo,
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.book_outlined),
+                selectedIcon: const Icon(Icons.book),
+                label: l10n.navDiary,
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.done_all_outlined),
+                selectedIcon: const Icon(Icons.done_all),
+                label: l10n.navCompleted,
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.book_outlined),
-            selectedIcon: Icon(Icons.book),
-            label: '日记本',
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => showAddTaskDialog(context),
+            child: const Icon(Icons.add, color: Colors.white),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.done_all_outlined),
-            selectedIcon: Icon(Icons.done_all),
-            label: '已完成',
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showAddTaskDialog(context),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+          floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        );
+      },
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/task_providers.dart';
+import '../providers/language_provider.dart';
 import '../models/task.dart';
 import '../theme/catchmind_theme.dart';
 import '../widgets/task_interactive.dart';
@@ -32,16 +33,6 @@ class _DiaryScreenState extends State<DiaryScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 16, top: 8),
-              child: Text(
-                '记录时间：${DateFormat('yyyy年M月d日 HH:mm', 'zh_CN').format(task.createdAt)}',
-                style: TextStyle(
-                  color: CatchMindColors.textSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ),
             TaskInteractive(
               task: task,
               provider: provider,
@@ -54,14 +45,15 @@ class _DiaryScreenState extends State<DiaryScreen> {
   }
 
   // 合并列表（按日期）
-  Widget _buildMergedList(Map<String, List<Task>> groupedTasks, TaskProvider provider) {
+  Widget _buildMergedList(Map<String, List<Task>> groupedTasks, TaskProvider provider, AppLocalizations l10n) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       itemCount: groupedTasks.keys.length,
       itemBuilder: (context, index) {
         final dateKey = groupedTasks.keys.elementAt(index);
         final tasks = groupedTasks[dateKey]!;
-        final dateText = DateFormat('yyyy年M月d日').format(DateTime.parse(dateKey));
+        final dateFormat = l10n.isEnglish ? 'MMM d, yyyy' : 'yyyy年M月d日';
+        final dateText = DateFormat(dateFormat, l10n.isEnglish ? 'en_US' : 'zh_CN').format(DateTime.parse(dateKey));
 
         return ExpansionTile(
           title: Text(
@@ -87,6 +79,8 @@ class _DiaryScreenState extends State<DiaryScreen> {
   @override
   Widget build(BuildContext context) {
     final taskProvider = Provider.of<TaskProvider>(context);
+    final languageProvider = Provider.of<LanguageProvider>(context);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
     final diaryTasks = taskProvider.diaryTasks;
 
     // 按日期分组（日记本按记录时间分组）
@@ -107,22 +101,35 @@ class _DiaryScreenState extends State<DiaryScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                '日记本',
-                style: TextStyle(
+              Text(
+                l10n.titleDiary,
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                   color: CatchMindColors.textPrimary,
                   letterSpacing: -0.3,
                 ),
               ),
-              IconButton(
-                icon: Icon(
-                  _isMerged ? Icons.merge_type : Icons.format_list_bulleted,
-                  color: CatchMindColors.accent,
-                ),
-                onPressed: () => setState(() => _isMerged = !_isMerged),
-                tooltip: _isMerged ? '取消合并' : '按日期合并',
+              Row(
+                children: [
+                  // 语言切换按钮
+                  IconButton(
+                    icon: const Icon(
+                      Icons.language,
+                      color: CatchMindColors.accent,
+                    ),
+                    onPressed: () => languageProvider.toggleLanguage(),
+                    tooltip: l10n.languageSwitch,
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _isMerged ? Icons.merge_type : Icons.format_list_bulleted,
+                      color: CatchMindColors.accent,
+                    ),
+                    onPressed: () => setState(() => _isMerged = !_isMerged),
+                    tooltip: _isMerged ? l10n.tooltipUnmerge : l10n.tooltipMergeByDate,
+                  ),
+                ],
               ),
             ],
           ),
@@ -131,17 +138,17 @@ class _DiaryScreenState extends State<DiaryScreen> {
         // 日记列表
         Expanded(
           child: diaryTasks.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text(
-                    '暂无感悟复盘',
-                    style: TextStyle(
+                    l10n.emptyDiary,
+                    style: const TextStyle(
                       color: CatchMindColors.textSecondary,
                       fontSize: 14,
                     ),
                   ),
                 )
               : _isMerged
-                  ? _buildMergedList(groupedTasks, taskProvider)
+                  ? _buildMergedList(groupedTasks, taskProvider, l10n)
                   : _buildNormalList(diaryTasks, taskProvider),
         ),
       ],

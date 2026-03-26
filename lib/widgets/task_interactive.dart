@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/task.dart';
 import '../providers/task_providers.dart';
+import '../providers/language_provider.dart';
 import 'add_task_dialog.dart';
 import 'task_card.dart';
 
@@ -59,8 +61,40 @@ class TaskInteractive extends StatelessWidget {
         onDoubleTap: () {
           provider.markTaskCompleted(task);
         },
+        onSecondaryTap: () {
+          _deleteTask(context);
+        },
         child: _card(),
       ),
     );
+  }
+
+  Future<void> _deleteTask(BuildContext context) async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    final l10n = AppLocalizations(languageProvider.currentLanguage);
+    
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(l10n.deleteTaskTitle),
+          content: Text('${l10n.deleteTaskConfirm} "${task.content}" ?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(l10n.dialogCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(l10n.delete),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok == true) {
+      provider.deleteTask(task);
+    }
   }
 }

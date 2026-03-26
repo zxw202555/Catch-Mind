@@ -49,17 +49,22 @@ class TaskProvider extends ChangeNotifier {
 
   void updateTask(Task task) {
     final box = Hive.box<Task>('tasks');
-    box.put(task.id, task);
-    final index = _allTasks.indexWhere((t) => t.id == task.id);
+    // 更新任务时设置编辑时间
+    final updatedTask = task.copyWith(editedAt: DateTime.now());
+    box.put(updatedTask.id, updatedTask);
+    final index = _allTasks.indexWhere((t) => t.id == updatedTask.id);
     if (index != -1) {
-      _allTasks[index] = task;
+      _allTasks[index] = updatedTask;
     }
     notifyListeners();
   }
 
   void markTaskCompleted(Task task) {
     HapticFeedback.mediumImpact();
-    final updatedTask = task.copyWith(isCompleted: true);
+    final updatedTask = task.copyWith(
+      isCompleted: true,
+      completedAt: DateTime.now(),
+    );
     updateTask(updatedTask);
   }
 
@@ -80,7 +85,10 @@ class TaskProvider extends ChangeNotifier {
 
   void markTaskIncomplete(Task task) {
     HapticFeedback.lightImpact();
-    final updatedTask = task.copyWith(isCompleted: false);
+    final updatedTask = task.copyWith(
+      isCompleted: false,
+      completedAt: null,
+    );
     updateTask(updatedTask);
   }
 
